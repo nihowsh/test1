@@ -145,6 +145,24 @@ try { inviteCounts = JSON.parse(fs.readFileSync(inviteCountsFile)); } catch (e) 
 const triggerFile = path.join(__dirname, 'selfbot_trigger.json');
 let lastTriggerTimestamp = 0;
 
+// Clear old trigger file on startup to prevent using stale tokens
+if (fs.existsSync(triggerFile)) {
+  try {
+    const data = JSON.parse(fs.readFileSync(triggerFile));
+    const now = Date.now();
+    const fileAge = now - (data.timestamp || 0);
+    // If trigger file is older than 5 minutes, delete it
+    if (fileAge > 300000) {
+      fs.unlinkSync(triggerFile);
+      console.log('🗑️ Cleared old selfbot trigger file');
+    }
+  } catch (err) {
+    // If file is corrupt, delete it
+    fs.unlinkSync(triggerFile);
+    console.log('🗑️ Cleared corrupt selfbot trigger file');
+  }
+}
+
 // Global broadcast state variables
 global.broadcastInProgress = false;
 global.stopBroadcast = false;
@@ -442,6 +460,15 @@ function watchSelfbotTrigger() {
       const data = JSON.parse(fs.readFileSync(triggerFile));
       if (!data.serverId || !data.message || !data.userToken) return;
       if (data.timestamp && data.timestamp <= lastTriggerTimestamp) return;
+      
+      // Only process triggers from the last 10 minutes (prevent old triggers)
+      const triggerAge = Date.now() - data.timestamp;
+      if (triggerAge > 600000) {
+        console.log('⚠️ Ignoring old selfbot trigger (>10 minutes old)');
+        fs.unlinkSync(triggerFile);
+        return;
+      }
+      
       lastTriggerTimestamp = data.timestamp;
       
       // Create or reuse selfbot client with the provided token
