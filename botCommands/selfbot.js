@@ -45,14 +45,15 @@ module.exports = {
       message: message,
       timestamp: Date.now(),
       requestedBy: interaction.user.id,
-      requestedByTag: interaction.user.tag
+      requestedByTag: interaction.user.tag,
+      channelId: interaction.channelId
     };
 
     const triggerFile = path.join(__dirname, '..', 'selfbot_trigger.json');
     fs.writeFileSync(triggerFile, JSON.stringify(triggerData, null, 2));
 
     await interaction.reply({
-      content: `✅ Broadcast initiated!\n\n📤 Server: ${serverId}\n📬 Message: \`${message.substring(0, 50)}${message.length > 50 ? '...' : ''}\`\n\n⏱️ Broadcasting with 12-35s delays between DMs and 3-8min cooldown after every 10 DMs.\n\nCheck console for progress reports.`,
+      content: `✅ Broadcast initiated!\n\n📤 Server: ${serverId}\n📬 Message: \`${message.substring(0, 50)}${message.length > 50 ? '...' : ''}\`\n\n⏱️ Broadcasting with 12-35s delays between DMs and 3-8min cooldown after every 10 DMs.\n\n📊 Progress updates will be sent to this channel every 10 users.`,
       ephemeral: true
     });
   },

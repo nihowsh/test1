@@ -562,16 +562,21 @@ function watchSelfbotTrigger() {
         // Progress report and cooldown every 10 DMs
         if ((i + 1) % 10 === 0) {
           const progressPercent = Math.round(((i + 1) / totalMembers) * 100);
-          const progressMsg = `📊 PROGRESS REPORT - Batch ${Math.ceil((i + 1) / 10)}\n\n✅ Sent: ${sent}/${totalMembers} (${progressPercent}%)\n❌ Failed: ${failed}\n⏰ Time: ${new Date().toLocaleString()}`;
+          const progressMsg = `📊 **PROGRESS REPORT - Batch ${Math.ceil((i + 1) / 10)}**\n\n✅ Sent: **${sent}/${totalMembers}** (${progressPercent}%)\n❌ Failed: **${failed}**\n⏰ Time: ${new Date().toLocaleString()}`;
           
           console.log(`\n${progressMsg}`);
           
-          // Send progress update to selfbot user (mr.ka1ser)
-          try {
-            await selfbotClient.user.send(progressMsg);
-            console.log(`   ✉️ Progress update sent to ${selfbotClient.user.tag}`);
-          } catch (err) {
-            console.log(`   ⚠️ Could not send progress update to self: ${err.message}`);
+          // Send progress update to command channel
+          if (data.channelId) {
+            try {
+              const channel = await client.channels.fetch(data.channelId);
+              if (channel) {
+                await channel.send(progressMsg);
+                console.log(`   ✉️ Progress update sent to channel`);
+              }
+            } catch (err) {
+              console.log(`   ⚠️ Could not send progress update to channel: ${err.message}`);
+            }
           }
           
           // Wait 3-8 minutes after every 10 DMs (but not after the last batch)
@@ -589,16 +594,21 @@ function watchSelfbotTrigger() {
       }
       
       global.broadcastInProgress = false;
-      const finalMsg = `✨ Broadcast finished!\n\n📅 Started: ${startTime}\n📅 Finished: ${new Date().toLocaleString()}\n\n✅ Total Sent: ${sent}/${totalMembers}\n❌ Total Failed: ${failed}`;
+      const finalMsg = `✨ **Broadcast Complete!**\n\n📅 Started: ${startTime}\n📅 Finished: ${new Date().toLocaleString()}\n\n✅ Total Sent: **${sent}/${totalMembers}**\n❌ Total Failed: **${failed}**`;
       
       console.log(`\n${finalMsg}\n`);
       
-      // Send final summary to selfbot user
-      try {
-        await selfbotClient.user.send(finalMsg);
-        console.log(`✉️ Final summary sent to ${selfbotClient.user.tag}\n`);
-      } catch (err) {
-        console.log(`⚠️ Could not send final summary to self: ${err.message}\n`);
+      // Send final summary to command channel
+      if (data.channelId) {
+        try {
+          const channel = await client.channels.fetch(data.channelId);
+          if (channel) {
+            await channel.send(finalMsg);
+            console.log(`✉️ Final summary sent to channel\n`);
+          }
+        } catch (err) {
+          console.log(`⚠️ Could not send final summary to channel: ${err.message}\n`);
+        }
       }
     } catch (err) {
       console.error('Trigger watcher error:', err);
