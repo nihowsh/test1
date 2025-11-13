@@ -4,10 +4,10 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('slowmode')
     .setDescription('Set slowmode for a channel')
-    .addChannelOption(option =>
-      option.setName('channel').setDescription('Channel to set slowmode').setRequired(false))
     .addIntegerOption(option =>
       option.setName('delay').setDescription('Delay in seconds (0 to disable)').setRequired(true).setMinValue(0).setMaxValue(21600))
+    .addChannelOption(option =>
+      option.setName('channel').setDescription('Channel to set slowmode').setRequired(false))
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
   
   async execute(interaction) {
