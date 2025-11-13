@@ -271,7 +271,7 @@ function createStatsEmbeds(stats) {
       { name: 'Server ID', value: `\`${stats.guildId}\`` },
       { name: 'Owner', value: `<@${stats.ownerId}>`, inline: true },
       { name: 'Created', value: `<t:${guildCreated}:R>`, inline: true },
-      { name: 'Verification Level', value: stats.verificationLevel || 'None', inline: true },
+      { name: 'Verification Level', value: String(stats.verificationLevel || 0), inline: true },
       { name: 'Boost Level', value: `Level ${stats.premiumTier} (${stats.premiumSubscriptionCount} boosts)`, inline: true },
       { name: 'Features', value: stats.features.substring(0, 1024) }
     )
