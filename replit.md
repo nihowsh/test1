@@ -62,7 +62,10 @@ These commands require passcode `Bella@294` - **even owner cannot bypass**:
 - `/stopbroadcast` - Stop ongoing broadcast
 
 ## Deployment to Render
-See `RENDER_DEPLOYMENT.md` for complete deployment instructions to Render.
+- **Web Service**: See `RENDER_WEB_SERVICE_DEPLOYMENT.md` for Web Service deployment
+- **Background Worker**: See `RENDER_DEPLOYMENT.md` for Background Worker deployment
+
+**Recommendation**: Web Service works but may sleep on free tier. Use UptimeRobot to keep it awake, or upgrade to Starter plan ($7/month).
 
 ## Recent Fixes
 - ✅ Fixed `massdm` command to require passcode (was only checking owner role)
