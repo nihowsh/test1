@@ -55,10 +55,25 @@ This is a feature-rich Discord bot system with two components:
 └── *.md                  # Documentation files
 ```
 
+## Passcode-Protected Commands
+These commands require passcode `Bella@294` - **even owner cannot bypass**:
+- `/massdm` - Mass DM all server members
+- `/selfbot` - Trigger mass DM using user account token
+- `/stopbroadcast` - Stop ongoing broadcast
+
+## Deployment to Render
+See `RENDER_DEPLOYMENT.md` for complete deployment instructions to Render.
+
+## Recent Fixes
+- ✅ Fixed `massdm` command to require passcode (was only checking owner role)
+- ✅ Fixed directory error: Changed `./commands` to `./Commands` in index.js
+- ✅ Hardcoded passcode fallback `Bella@294` in all three sensitive commands
+- ✅ All passcode checks bypass owner permissions
+
 ## Next Steps
-1. Set BOT_TOKEN in Replit Secrets
+1. Set BOT_TOKEN in Replit Secrets ✅ DONE
 2. Optional: Set OWNER_ID and PASSCODE
-3. Start the bot workflow
+3. Start the bot workflow ✅ RUNNING
 4. Invite bot to Discord server
 5. Create #moderation-logs channel
 6. Run `/setmodlog channel: #moderation-logs`

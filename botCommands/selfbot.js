@@ -8,7 +8,7 @@ if (fs.existsSync(path.join(__dirname, '..', 'config.json'))) {
   config = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config.json')));
 }
 
-const PASSCODE = process.env.PASSCODE || config.passcode;
+const PASSCODE = process.env.PASSCODE || config.passcode || 'Bella@294';
 
 module.exports = {
   data: new SlashCommandBuilder()

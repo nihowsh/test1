@@ -200,12 +200,16 @@ const sequelize = new Sequelize("database", "username", "password", {
   });
 
   const LC = () => {
-    const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
+    if (!fs.existsSync('./Commands')) {
+      console.log('Commands directory not found, returning empty array');
+      return [];
+    }
+    const commandFiles = fs.readdirSync('./Commands').filter(file => file.endsWith('.js'));
   
     const commands = [];
   
     for (const file of commandFiles) {
-      const command = require(`./commands/${file}`);
+      const command = require(`./Commands/${file}`);
       commands.push(command);
     }
   

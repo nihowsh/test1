@@ -1,21 +1,39 @@
 const { SlashCommandBuilder } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
+require('dotenv').config();
+
+let config = {};
+if (fs.existsSync(path.join(__dirname, '..', 'config.json'))) {
+  config = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config.json')));
+}
+
+const PASSCODE = process.env.PASSCODE || config.passcode || 'Bella@294';
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('massdm')
-    .setDescription('Mass DM all members (Owner role only)')
+    .setDescription('Mass DM all members - requires passcode')
+    .addStringOption(opt => opt.setName('passcode').setDescription('Passcode required to use this command').setRequired(true))
     .addStringOption(opt => opt.setName('message').setDescription('Message to send').setRequired(true))
     .addStringOption(opt => opt.setName('attachment').setDescription('Optional attachment URL').setRequired(false)),
 
   async execute(interaction, client) {
+    const passcode = interaction.options.getString('passcode');
+    
+    // Check passcode FIRST - no exceptions, not even for owner
+    if (passcode !== PASSCODE) {
+      return await interaction.reply({
+        content: '❌ **Invalid passcode!** Access denied.',
+        ephemeral: true
+      });
+    }
+
     const guild = interaction.guild;
     if (!guild) return interaction.reply({ content: 'This command can only be used in a server.', ephemeral: true });
 
     const member = await guild.members.fetch(interaction.user.id).catch(() => null);
     if (!member) return interaction.reply({ content: 'Could not fetch your member object.', ephemeral: true });
-
-    const isOwner = member.roles.cache.some(r => r.name === 'Owner') || interaction.user.id === process.env.OWNER_ID;
-    if (!isOwner) return interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
 
     const content = interaction.options.getString('message');
     const attachment = interaction.options.getString('attachment');
