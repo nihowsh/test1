@@ -476,21 +476,20 @@ function watchSelfbotTrigger() {
         currentSelfbotToken = data.userToken;
         selfbotClient = new SelfbotClient({ checkUpdate: false });
         
+        // Suppress the ClientUserSettingManager error
+        selfbotClient.on('error', (err) => {
+          if (!err.message.includes('ClientUserSettingManager')) {
+            console.error('Selfbot error:', err);
+          }
+        });
+        
         try {
           await selfbotClient.login(data.userToken);
           console.log(`✅ Selfbot logged in as ${selfbotClient.user.tag}`);
           
-          // Wait for client to be fully ready and guilds to be cached
-          await new Promise(resolve => {
-            if (selfbotClient.guilds.cache.size > 0) {
-              resolve();
-            } else {
-              selfbotClient.once('ready', resolve);
-            }
-          });
+          // Wait for guilds to load - use a timeout-based approach
+          await sleep(5000); // Give Discord time to send all guild data
           
-          // Give it a moment for all guilds to load
-          await sleep(2000);
           console.log(`📊 Selfbot has access to ${selfbotClient.guilds.cache.size} servers`);
         } catch (err) {
           console.error(`❌ Failed to login selfbot with provided token:`, err.message);
