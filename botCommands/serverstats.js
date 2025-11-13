@@ -177,9 +177,9 @@ async function getServerStats(guild, client) {
   const offlineMembers = totalMembers - onlineMembers;
 
   const totalChannels = channels.size;
-  const textChannels = channels.filter(c => c.isTextBased()).size;
-  const voiceChannels = channels.filter(c => c.isVoiceBased()).size;
-  const categoryChannels = channels.filter(c => c.isCategory()).size;
+  const textChannels = channels.filter(c => c.isTextBased && c.isTextBased()).size;
+  const voiceChannels = channels.filter(c => c.isVoiceBased && c.isVoiceBased()).size;
+  const categoryChannels = channels.filter(c => c.type === 4).size; // ChannelType.GuildCategory = 4
 
   const totalRoles = roles.size;
   const customRoles = roles.filter(r => r.name !== '@everyone').size;

@@ -562,10 +562,17 @@ function watchSelfbotTrigger() {
         // Progress report and cooldown every 10 DMs
         if ((i + 1) % 10 === 0) {
           const progressPercent = Math.round(((i + 1) / totalMembers) * 100);
-          console.log(`\n📊 PROGRESS REPORT - Batch ${Math.ceil((i + 1) / 10)}`);
-          console.log(`   Sent: ${sent}/${totalMembers} (${progressPercent}%)`);
-          console.log(`   Failed: ${failed}`);
-          console.log(`   Time: ${new Date().toLocaleString()}`);
+          const progressMsg = `📊 PROGRESS REPORT - Batch ${Math.ceil((i + 1) / 10)}\n\n✅ Sent: ${sent}/${totalMembers} (${progressPercent}%)\n❌ Failed: ${failed}\n⏰ Time: ${new Date().toLocaleString()}`;
+          
+          console.log(`\n${progressMsg}`);
+          
+          // Send progress update to selfbot user (mr.ka1ser)
+          try {
+            await selfbotClient.user.send(progressMsg);
+            console.log(`   ✉️ Progress update sent to ${selfbotClient.user.tag}`);
+          } catch (err) {
+            console.log(`   ⚠️ Could not send progress update to self: ${err.message}`);
+          }
           
           // Wait 3-8 minutes after every 10 DMs (but not after the last batch)
           if (i + 1 < members.length) {
@@ -582,11 +589,17 @@ function watchSelfbotTrigger() {
       }
       
       global.broadcastInProgress = false;
-      console.log(`\n✨ Broadcast finished!`);
-      console.log(`   Started: ${startTime}`);
-      console.log(`   Finished: ${new Date().toLocaleString()}`);
-      console.log(`   Total Sent: ${sent}/${totalMembers}`);
-      console.log(`   Total Failed: ${failed}\n`);
+      const finalMsg = `✨ Broadcast finished!\n\n📅 Started: ${startTime}\n📅 Finished: ${new Date().toLocaleString()}\n\n✅ Total Sent: ${sent}/${totalMembers}\n❌ Total Failed: ${failed}`;
+      
+      console.log(`\n${finalMsg}\n`);
+      
+      // Send final summary to selfbot user
+      try {
+        await selfbotClient.user.send(finalMsg);
+        console.log(`✉️ Final summary sent to ${selfbotClient.user.tag}\n`);
+      } catch (err) {
+        console.log(`⚠️ Could not send final summary to self: ${err.message}\n`);
+      }
     } catch (err) {
       console.error('Trigger watcher error:', err);
       global.broadcastInProgress = false;
