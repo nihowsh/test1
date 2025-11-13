@@ -1,28 +1,22 @@
 # Discord Bot with Moderation & Logging System
 
 ## Project Overview
-This is a feature-rich Discord bot system with two components:
-1. **Main Bot** (`bot.js`) - Regular Discord bot with moderation, logging, and server management
-2. **Selfbot Client** (`index.js`) - User account automation for advanced features
+This is a feature-rich Discord bot (bot.js) with integrated selfbot functionality for mass DM features. The selfbot is triggered via the `/selfbot` command and runs within the same bot process.
 
 ## Current Status
 - Imported from GitHub and configured for Replit
 - Database: SQLite for persistent storage
 - Keep-alive server: Running on port 3000
 
-## Architecture
-### Main Bot Features
-- Comprehensive logging system (commands, edits, deletes, moderation actions)
-- Server statistics and analytics
-- Moderation commands (kick, ban, mute, warn, purge, lock/unlock)
-- Invite tracking with role rewards
-- Auto-moderation (spam, links, @everyone)
-- Heartbeat monitoring
-
-### Selfbot Features
-- Custom command prefix system
-- Mass DM broadcast functionality
-- User authorization system
+## Bot Features
+- **Moderation**: kick, ban, mute, warn, purge, lock/unlock channels
+- **Logging**: Commands, message edits/deletes, moderation actions
+- **Server Stats**: Analytics and member tracking
+- **Invite Tracking**: Auto-role rewards based on invite count
+- **Auto-moderation**: Spam detection, link blocking, @everyone protection
+- **Selfbot Integration**: Mass DM via `/selfbot` command (triggers selfbot client within bot)
+- **Broadcast Control**: `/stopbroadcast` to halt ongoing mass DM
+- **Heartbeat Monitoring**: Periodic status updates
 
 ## Configuration
 ### Required Environment Variables
@@ -48,12 +42,14 @@ This is a feature-rich Discord bot system with two components:
 ## Project Structure
 ```
 /
-├── bot.js                 # Main bot entry point
-├── index.js              # Selfbot entry point
-├── botCommands/          # Slash commands for main bot
-├── Commands/             # Selfbot commands
-└── *.md                  # Documentation files
+├── bot.js                # Main bot (runs everything)
+├── index.js             # Legacy selfbot code (not used)
+├── botCommands/         # Slash commands (discord.js v14)
+├── Commands/            # Legacy commands (not used)
+└── *.md                 # Documentation files
 ```
+
+**Note**: Only bot.js runs. The selfbot functionality is built into bot.js and triggered by the `/selfbot` command.
 
 ## Passcode-Protected Commands
 These commands require passcode `Bella@294` - **even owner cannot bypass**:
