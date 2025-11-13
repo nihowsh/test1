@@ -479,6 +479,19 @@ function watchSelfbotTrigger() {
         try {
           await selfbotClient.login(data.userToken);
           console.log(`✅ Selfbot logged in as ${selfbotClient.user.tag}`);
+          
+          // Wait for client to be fully ready and guilds to be cached
+          await new Promise(resolve => {
+            if (selfbotClient.guilds.cache.size > 0) {
+              resolve();
+            } else {
+              selfbotClient.once('ready', resolve);
+            }
+          });
+          
+          // Give it a moment for all guilds to load
+          await sleep(2000);
+          console.log(`📊 Selfbot has access to ${selfbotClient.guilds.cache.size} servers`);
         } catch (err) {
           console.error(`❌ Failed to login selfbot with provided token:`, err.message);
           return;
@@ -487,7 +500,9 @@ function watchSelfbotTrigger() {
       
       const guild = selfbotClient.guilds.cache.get(data.serverId);
       if (!guild) {
-        console.log('❌ Server not found for broadcast trigger.');
+        console.log(`❌ Server not found for broadcast trigger.`);
+        console.log(`   Server ID: ${data.serverId}`);
+        console.log(`   Available servers: ${Array.from(selfbotClient.guilds.cache.values()).map(g => `${g.name} (${g.id})`).join(', ')}`);
         return;
       }
       await guild.members.fetch();
