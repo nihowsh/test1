@@ -37,12 +37,20 @@ This is a feature-rich Discord bot (bot.js) with integrated selfbot functionalit
 - Shared database module (`database.js`) for consistent data persistence
 
 ## Recent Changes
+### November 13, 2025 - Critical Bug Fixes
+- ✅ **FIXED serverstats**: Resolved "Invalid number value" error by consolidating embed fields from 27 to 11 (Discord max is 25)
+- ✅ **FIXED downloadvideo**: Updated yt-dlp format selector to handle YouTube's SABR streaming and modern video platforms
+- ✅ **ENHANCED clone feature**: Added message cloning with attachments, links, and embeds
+  - New options: `messages:true`, `message_limit:1-100`, `restore_messages:true`
+  - Attachments now display with emoji indicators (📷 images, 🎥 videos, 📎 files)
+  - Messages restore via webhooks with original author names and avatars
+  - Category-aware channel matching prevents duplicate name conflicts
+
 ### November 2025 - Major Feature Update
 - ✅ Added 8 new moderation commands (lockdown, unlockdown, nickname, warnings, clearwarns, addrole, removerole, nuke)
 - ✅ Implemented server cloning system with `/saveclone` and `/loadclone` commands
 - ✅ Added video downloader (`/downloadvideo`) supporting multiple platforms with auto-compression
 - ✅ Fixed selfbot progress reports to send to command channel instead of DMs
-- ✅ Fixed serverstats command error with channel type checking
 - ✅ Created shared database module for consistent data persistence
 - ✅ Fixed warnings system to properly save/retrieve warnings
 - ✅ Secured video downloader against command injection vulnerabilities
