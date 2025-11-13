@@ -243,37 +243,19 @@ function createStatsEmbeds(stats) {
     .setTitle(`📊 ${stats.guildName} - Server Statistics`)
     .setThumbnail(stats.guildIcon)
     .addFields(
-      { name: '━━━━━━━━━━━━━━━ 👥 MEMBERS ━━━━━━━━━━━━━━━', value: '\u200b' },
-      { name: '🔢 Total Members', value: `${stats.totalMembers}`, inline: true },
-      { name: '👤 Users', value: `${stats.userMembers}`, inline: true },
-      { name: '🤖 Bots', value: `${stats.botMembers}`, inline: true },
-      { name: '🟢 Online', value: `${stats.onlineMembers}`, inline: true },
-      { name: '🟡 Idle', value: `${stats.idleMembers}`, inline: true },
-      { name: '🔴 Offline', value: `${stats.offlineMembers}`, inline: true },
-      { name: '🟣 Do Not Disturb', value: `${stats.doNotDisturbMembers}`, inline: true },
-      { name: '📈 Joined Last 7 Days', value: `${stats.recentMembers}`, inline: true },
-      { name: '⏸️ Server Activity', value: stats.activityLevel, inline: true },
+      { name: '👥 Members', value: `**Total:** ${stats.totalMembers} (${stats.userMembers} users, ${stats.botMembers} bots)\n**Online:** ${stats.onlineMembers} | **Idle:** ${stats.idleMembers} | **DND:** ${stats.doNotDisturbMembers} | **Offline:** ${stats.offlineMembers}\n**Activity:** ${stats.activityLevel}\n**Joined (7d):** ${stats.recentMembers}` },
       
-      { name: '━━━━━━━━━━━━━━━ 💬 CHANNELS ━━━━━━━━━━━━━━━', value: '\u200b' },
-      { name: '🔢 Total Channels', value: `${stats.totalChannels}`, inline: true },
-      { name: '💬 Text Channels', value: `${stats.textChannels}`, inline: true },
-      { name: '🔊 Voice Channels', value: `${stats.voiceChannels}`, inline: true },
-      { name: '📁 Categories', value: `${stats.categoryChannels}`, inline: true },
+      { name: '💬 Channels', value: `**Total:** ${stats.totalChannels}\n**Text:** ${stats.textChannels} | **Voice:** ${stats.voiceChannels} | **Categories:** ${stats.categoryChannels}` },
       
-      { name: '━━━━━━━━━━━━━━━ 👑 ROLES ━━━━━━━━━━━━━━━', value: '\u200b' },
-      { name: '🔢 Total Roles', value: `${stats.totalRoles}`, inline: true },
-      { name: '🎨 Custom Roles', value: `${stats.customRoles}`, inline: true },
+      { name: '👑 Roles', value: `**Total:** ${stats.totalRoles} | **Custom:** ${stats.customRoles}`, inline: true },
+      { name: '🚫 Moderation', value: `**Banned:** ${stats.bannedCount}`, inline: true },
+      { name: '⏸️ Boost', value: `**Level ${stats.premiumTier}** (${stats.premiumSubscriptionCount} boosts)`, inline: true },
       
-      { name: '━━━━━━━━━━━━━━━ 📋 MODERATION ━━━━━━━━━━━━━━━', value: '\u200b' },
-      { name: '🚫 Banned Members', value: `${stats.bannedCount}`, inline: true },
-      
-      { name: '━━━━━━━━━━━━━━━ ℹ️ SERVER INFO ━━━━━━━━━━━━━━━', value: '\u200b' },
       { name: 'Server ID', value: `\`${stats.guildId}\`` },
       { name: 'Owner', value: `<@${stats.ownerId}>`, inline: true },
       { name: 'Created', value: `<t:${guildCreated}:R>`, inline: true },
-      { name: 'Verification Level', value: String(stats.verificationLevel || 0), inline: true },
-      { name: 'Boost Level', value: `Level ${stats.premiumTier} (${stats.premiumSubscriptionCount} boosts)`, inline: true },
-      { name: 'Features', value: stats.features.substring(0, 1024) }
+      { name: 'Verification', value: `Level ${stats.verificationLevel}`, inline: true },
+      { name: 'Features', value: stats.features.substring(0, 1024) || 'None' }
     )
     .setFooter({ text: `Stats as of now` })
     .setTimestamp();

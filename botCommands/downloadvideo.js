@@ -36,8 +36,9 @@ async function downloadVideo(url, outputPath) {
   }
   
   const args = [
-    '-f', 'best[filesize<25M]',
+    '-f', 'bestvideo[filesize<20M]+bestaudio[filesize<5M]/best[filesize<25M]/bestvideo+bestaudio/best',
     '--merge-output-format', 'mp4',
+    '--no-warnings',
     '-o', outputPath,
     url
   ];

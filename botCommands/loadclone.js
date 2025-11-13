@@ -242,8 +242,16 @@ module.exports = {
                 };
 
                 if (msgData.attachments && msgData.attachments.length > 0) {
-                  const attachmentText = msgData.attachments.map(a => `[${a.name}](${a.url})`).join('\n');
-                  webhookOptions.content = (webhookOptions.content ? webhookOptions.content + '\n\n' : '') + '**Attachments:**\n' + attachmentText;
+                  const attachmentText = msgData.attachments.map(a => {
+                    if (a.contentType && a.contentType.startsWith('image/')) {
+                      return `📷 [${a.name}](<${a.url}>)`;
+                    } else if (a.contentType && a.contentType.startsWith('video/')) {
+                      return `🎥 [${a.name}](<${a.url}>)`;
+                    } else {
+                      return `📎 [${a.name}](<${a.url}>)`;
+                    }
+                  }).join('\n');
+                  webhookOptions.content = (webhookOptions.content ? webhookOptions.content + '\n\n' : '') + '**📁 Attachments:**\n' + attachmentText;
                 }
 
                 if (webhookOptions.content || webhookOptions.embeds.length > 0) {
