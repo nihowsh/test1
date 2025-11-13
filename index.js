@@ -12,7 +12,7 @@ if (fs.existsSync('config.json')) {
 }
 
 const client = new Client({
-	checkUpdate: false
+        checkUpdate: false
 });
 const authorizedUsers = new Map();
 
@@ -53,7 +53,7 @@ if (!userPrefix) {
 const sequelize = new Sequelize("database", "username", "password", {
     host: "localhost",
     dialect: "sqlite",
-    storage: "path/to/database.sqlite",
+    storage: "selfbot_database.sqlite",
     logging: false
   });
   
