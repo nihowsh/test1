@@ -213,7 +213,14 @@ app.listen(KEEPALIVE_PORT, () => console.log(`Keep-alive server running on port 
 process.on('uncaughtException', err => {
   console.error('Uncaught Exception:', err);
 });
-process.on('unhandledRejection', err => {
+process.on('unhandledRejection', (err) => {
+  // Suppress the known ClientUserSettingManager bug in selfbot library
+  if (err && err.message && err.message.includes('ClientUserSettingManager')) {
+    return; // Ignore this specific error
+  }
+  if (err && err.stack && err.stack.includes('ClientUserSettingManager')) {
+    return; // Ignore this specific error
+  }
   console.error('Unhandled Rejection:', err);
 });
 
@@ -474,26 +481,37 @@ function watchSelfbotTrigger() {
       // Create or reuse selfbot client with the provided token
       if (!selfbotClient || currentSelfbotToken !== data.userToken) {
         currentSelfbotToken = data.userToken;
-        selfbotClient = new SelfbotClient({ checkUpdate: false });
-        
-        // Suppress the ClientUserSettingManager error
-        selfbotClient.on('error', (err) => {
-          if (!err.message.includes('ClientUserSettingManager')) {
-            console.error('Selfbot error:', err);
-          }
+        selfbotClient = new SelfbotClient({ 
+          checkUpdate: false,
+          partials: ['USER', 'CHANNEL', 'GUILD_MEMBER', 'MESSAGE']
         });
+        
+        // Suppress errors
+        selfbotClient.on('error', () => {});
+        
+        let loginSuccess = false;
         
         try {
           await selfbotClient.login(data.userToken);
+          loginSuccess = true;
           console.log(`✅ Selfbot logged in as ${selfbotClient.user.tag}`);
-          
-          // Wait for guilds to load - use a timeout-based approach
-          await sleep(5000); // Give Discord time to send all guild data
+        } catch (err) {
+          console.error(`❌ Failed to login selfbot:`, err.message);
+          return;
+        }
+        
+        if (loginSuccess) {
+          // Wait for guilds to properly load - increased timeout
+          console.log('⏳ Waiting for guilds to load...');
+          await sleep(8000); // 8 seconds for full initialization
           
           console.log(`📊 Selfbot has access to ${selfbotClient.guilds.cache.size} servers`);
-        } catch (err) {
-          console.error(`❌ Failed to login selfbot with provided token:`, err.message);
-          return;
+          
+          if (selfbotClient.guilds.cache.size === 0) {
+            console.log('⚠️ No servers loaded yet, waiting another 5 seconds...');
+            await sleep(5000);
+            console.log(`📊 Now has access to ${selfbotClient.guilds.cache.size} servers`);
+          }
         }
       }
       
