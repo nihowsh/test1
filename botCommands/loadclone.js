@@ -17,11 +17,16 @@ module.exports = {
       option.setName('delete_existing')
         .setDescription('Delete existing channels/roles first? (default: false)')
         .setRequired(false))
+    .addBooleanOption(option =>
+      option.setName('restore_messages')
+        .setDescription('Restore saved messages? (default: false)')
+        .setRequired(false))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction) {
     const code = interaction.options.getString('code').toUpperCase();
     const deleteExisting = interaction.options.getBoolean('delete_existing') ?? false;
+    const restoreMessages = interaction.options.getBoolean('restore_messages') ?? false;
 
     await interaction.deferReply();
 
@@ -179,7 +184,7 @@ module.exports = {
       }
 
       // Create emojis
-      for (const emojiData of templateData.emojis) {
+      for (const emojiData of templateData.emojis || []) {
         try {
           await guild.emojis.create({
             attachment: emojiData.url,
@@ -192,12 +197,79 @@ module.exports = {
         }
       }
 
+      // Restore messages
+      let messagesRestored = 0;
+      if (restoreMessages && templateData.messages && templateData.messages.length > 0) {
+        await interaction.editReply({ content: `⏳ Restoring messages to channels... This may take a while.` });
+        
+        for (const channelData of templateData.messages) {
+          try {
+            let targetChannel = null;
+            
+            if (channelData.categoryName) {
+              targetChannel = guild.channels.cache.find(c => 
+                c.name === channelData.channelName && 
+                c.parent?.name === channelData.categoryName && 
+                c.isTextBased()
+              );
+            }
+            
+            if (!targetChannel) {
+              targetChannel = guild.channels.cache.find(c => 
+                c.name === channelData.channelName && 
+                c.isTextBased()
+              );
+            }
+            
+            if (!targetChannel) {
+              console.log(`Channel ${channelData.channelName} not found, skipping messages`);
+              continue;
+            }
+
+            const webhook = await targetChannel.createWebhook({
+              name: 'Clone Restore',
+              reason: 'Restoring cloned messages',
+            });
+
+            for (const msgData of channelData.messages) {
+              try {
+                const webhookOptions = {
+                  content: msgData.content || null,
+                  username: msgData.username,
+                  avatarURL: msgData.avatarURL,
+                  embeds: msgData.embeds || [],
+                  allowedMentions: { parse: [] },
+                };
+
+                if (msgData.attachments && msgData.attachments.length > 0) {
+                  const attachmentText = msgData.attachments.map(a => `[${a.name}](${a.url})`).join('\n');
+                  webhookOptions.content = (webhookOptions.content ? webhookOptions.content + '\n\n' : '') + '**Attachments:**\n' + attachmentText;
+                }
+
+                if (webhookOptions.content || webhookOptions.embeds.length > 0) {
+                  await webhook.send(webhookOptions);
+                  messagesRestored++;
+                  await sleep(1000);
+                }
+              } catch (msgErr) {
+                console.error('Message restore error:', msgErr);
+              }
+            }
+
+            await webhook.delete('Cleanup after message restore');
+          } catch (channelErr) {
+            console.error(`Failed to restore messages to ${channelData.channelName}:`, channelErr);
+          }
+        }
+      }
+
       const summary = [
         `✅ **Roles:** ${rolesCreated}`,
         `✅ **Categories:** ${categoriesCreated}`,
         `✅ **Channels:** ${channelsCreated}`,
       ];
       if (emojisCreated > 0) summary.push(`✅ **Emojis:** ${emojisCreated}`);
+      if (messagesRestored > 0) summary.push(`✅ **Messages:** ${messagesRestored}`);
       if (deleted > 0) summary.push(`🗑️ **Deleted:** ${deleted}`);
 
       await interaction.editReply({

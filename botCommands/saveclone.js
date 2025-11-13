@@ -34,6 +34,16 @@ module.exports = {
       option.setName('emojis')
         .setDescription('Clone emojis? (default: false)')
         .setRequired(false))
+    .addBooleanOption(option =>
+      option.setName('messages')
+        .setDescription('Clone messages from channels? (default: false)')
+        .setRequired(false))
+    .addIntegerOption(option =>
+      option.setName('message_limit')
+        .setDescription('Max messages per channel to clone (default: 50, max: 100)')
+        .setMinValue(1)
+        .setMaxValue(100)
+        .setRequired(false))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction) {
@@ -42,6 +52,8 @@ module.exports = {
     const cloneChannels = interaction.options.getBoolean('channels') ?? true;
     const cloneCategories = interaction.options.getBoolean('categories') ?? true;
     const cloneEmojis = interaction.options.getBoolean('emojis') ?? false;
+    const cloneMessages = interaction.options.getBoolean('messages') ?? false;
+    const messageLimit = Math.max(1, Math.min(interaction.options.getInteger('message_limit') ?? 50, 100));
 
     await interaction.deferReply();
 
@@ -54,6 +66,7 @@ module.exports = {
         categories: [],
         channels: [],
         emojis: [],
+        messages: [],
       };
 
       // Clone roles
@@ -168,6 +181,54 @@ module.exports = {
         }
       }
 
+      // Clone messages from text channels
+      if (cloneMessages) {
+        await interaction.editReply({ content: `⏳ Cloning messages from channels... This may take a while.` });
+        
+        const textChannels = guild.channels.cache.filter(c => c.isTextBased() && c.type === 0);
+        let totalMessages = 0;
+        
+        for (const [, channel] of textChannels) {
+          try {
+            const messages = await channel.messages.fetch({ limit: messageLimit });
+            const channelMessages = [];
+            
+            for (const [, msg] of messages) {
+              const messageData = {
+                content: msg.content || '',
+                username: msg.author.username,
+                avatarURL: msg.author.displayAvatarURL({ dynamic: true }),
+                embeds: msg.embeds.map(e => e.toJSON()),
+                attachments: msg.attachments.map(a => ({
+                  name: a.name,
+                  url: a.url,
+                  contentType: a.contentType,
+                  size: a.size,
+                })),
+                timestamp: msg.createdTimestamp,
+              };
+              
+              channelMessages.push(messageData);
+              totalMessages++;
+            }
+            
+            if (channelMessages.length > 0) {
+              const parentCategory = channel.parent ? channel.parent.name : null;
+              templateData.messages.push({
+                channelName: channel.name,
+                categoryName: parentCategory,
+                channelId: channel.id,
+                messages: channelMessages.reverse(),
+              });
+            }
+          } catch (err) {
+            console.error(`Failed to fetch messages from ${channel.name}:`, err);
+          }
+        }
+        
+        await interaction.editReply({ content: `⏳ Cloned ${totalMessages} messages. Saving template...` });
+      }
+
       // Generate unique code
       let code;
       let exists = true;
@@ -190,6 +251,10 @@ module.exports = {
       if (cloneCategories) summary.push(`✅ ${templateData.categories.length} categories`);
       if (cloneChannels) summary.push(`✅ ${templateData.channels.length + templateData.categories.reduce((a, c) => a + c.channels.length, 0)} channels`);
       if (cloneEmojis) summary.push(`✅ ${templateData.emojis.length} emojis`);
+      if (cloneMessages) {
+        const totalMsgs = templateData.messages.reduce((sum, ch) => sum + ch.messages.length, 0);
+        summary.push(`✅ ${totalMsgs} messages from ${templateData.messages.length} channels`);
+      }
 
       await interaction.editReply({
         content: `🎉 **Server Template Saved!**\n\n**Template Name:** ${name}\n**Code:** \`${code}\`\n\n${summary.join('\n')}\n\n💡 Use \`/loadclone code:${code}\` to apply this template to any server!`,
