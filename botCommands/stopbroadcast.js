@@ -1,11 +1,14 @@
 const { SlashCommandBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config();
 
 let config = {};
 if (fs.existsSync(path.join(__dirname, '..', 'config.json'))) {
   config = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config.json')));
 }
+
+const PASSCODE = process.env.PASSCODE || config.passcode;
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -18,7 +21,7 @@ module.exports = {
     const passcode = interaction.options.getString('passcode');
     
     // Check passcode - no exceptions, not even for owner
-    if (passcode !== config.passcode) {
+    if (passcode !== PASSCODE) {
       return await interaction.reply({
         content: '❌ **Invalid passcode!** Access denied.',
         ephemeral: true

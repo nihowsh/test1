@@ -14,6 +14,7 @@ if (fs.existsSync('config.json')) {
 
 const BOT_TOKEN = process.env.BOT_TOKEN || config.token;
 const OWNER_ID = process.env.OWNER_ID || null;
+const PASSCODE = process.env.PASSCODE || config.passcode;
 const HEARTBEAT_CHANNEL = process.env.HEARTBEAT_CHANNEL || 'bot-logs';
 const HEARTBEAT_INTERVAL_MS = parseInt(process.env.HEARTBEAT_INTERVAL_MS) || 1000 * 60 * 60 * 3;
 
