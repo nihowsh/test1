@@ -1,10 +1,10 @@
-const { Client, GatewayIntentBits, Collection, Partials } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, Partials, EmbedBuilder } = require('discord.js');
 const { Client: SelfbotClient } = require('discord.js-selfbot-v13');
 const Sequelize = require('sequelize');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
-const { AttachmentRules: SharedAttachmentRules } = require('./database');
+const { AttachmentRules: SharedAttachmentRules, AutoModConfig, WordFilter, ScheduledMentions, LogSettings, Warnings } = require('./database');
 require('dotenv').config();
 
 // ============== CONFIGURATION ==============
@@ -110,53 +110,6 @@ const ModSettings = sequelize.define("modSettings", {
   },
   automodLogChannel: {
     type: Sequelize.STRING,
-  },
-});
-
-// Logging settings for command and moderation logs
-const LogSettings = sequelize.define("logSettings", {
-  guildId: {
-    type: Sequelize.STRING,
-    primaryKey: true,
-  },
-  logChannelId: {
-    type: Sequelize.STRING,
-  },
-  logCommands: {
-    type: Sequelize.BOOLEAN,
-    defaultValue: true,
-  },
-  logMessages: {
-    type: Sequelize.BOOLEAN,
-    defaultValue: true,
-  },
-  logMemberActions: {
-    type: Sequelize.BOOLEAN,
-    defaultValue: true,
-  },
-});
-
-// Scheduled mentions for auto-mentioning @everyone
-const ScheduledMentions = sequelize.define("scheduledMentions", {
-  guildId: {
-    type: Sequelize.STRING,
-    allowNull: false,
-  },
-  channelId: {
-    type: Sequelize.STRING,
-    allowNull: false,
-  },
-  intervalHours: {
-    type: Sequelize.INTEGER,
-    defaultValue: 2,
-  },
-  lastMentionTime: {
-    type: Sequelize.DATE,
-    allowNull: true,
-  },
-  enabled: {
-    type: Sequelize.BOOLEAN,
-    defaultValue: true,
   },
 });
 
@@ -304,15 +257,45 @@ client.on('guildMemberAdd', async member => {
     const threeDaysMs = 1000 * 60 * 60 * 24 * 3;
     const isAlt = accountAgeMs < threeDaysMs;
 
-    // Anti-raid detection
-    const now = Date.now();
-    const guildJoins = global.guildJoinTimestamps.get(guild.id) || [];
-    guildJoins.push(now);
-    const recentJoins = guildJoins.filter(t => now - t < 10000); // Last 10 seconds
-    global.guildJoinTimestamps.set(guild.id, recentJoins);
-    
-    if (recentJoins.length >= 5) {
-      await logEvent(guild, `🚨 **RAID ALERT!** ${recentJoins.length} members joined in the last 10 seconds!`);
+    // Anti-raid detection (configurable)
+    let config = await AutoModConfig.findOne({ where: { guildId: guild.id } });
+    if (!config) {
+      config = await AutoModConfig.create({ guildId: guild.id });
+    }
+
+    if (config.raidProtectionEnabled) {
+      const now = Date.now();
+      const guildJoins = global.guildJoinTimestamps.get(guild.id) || [];
+      guildJoins.push(now);
+      const recentJoins = guildJoins.filter(t => now - t < config.raidTimeWindow);
+      global.guildJoinTimestamps.set(guild.id, recentJoins);
+      
+      if (recentJoins.length >= config.raidJoinThreshold) {
+        await logEvent(guild, `🚨 **RAID ALERT!** ${recentJoins.length} members joined in the last ${config.raidTimeWindow / 1000} seconds!`);
+        
+        // Auto-lockdown if enabled
+        if (config.autoLockdownOnRaid) {
+          try {
+            const everyoneRole = guild.roles.everyone;
+            await logEvent(guild, `🔒 **AUTO-LOCKDOWN ACTIVATED!** Locking all channels due to raid detection.`);
+            
+            // Lock all text channels by denying SendMessages permission
+            let lockedCount = 0;
+            for (const channel of guild.channels.cache.values()) {
+              if (channel.isTextBased() && channel.permissionsFor(everyoneRole).has('SendMessages')) {
+                await channel.permissionOverwrites.edit(everyoneRole, {
+                  SendMessages: false,
+                }).catch(() => {});
+                lockedCount++;
+              }
+            }
+            await logEvent(guild, `🔒 Locked ${lockedCount} channels. Use /unlockdown to restore normal permissions.`);
+          } catch (err) {
+            console.error('Auto-lockdown error:', err);
+            await logEvent(guild, `⚠️ Failed to activate auto-lockdown: ${err.message}`);
+          }
+        }
+      }
     }
 
     let usedInviterId = null;
@@ -376,6 +359,48 @@ client.on('guildMemberAdd', async member => {
   }
 });
 
+// Helper function to add warning and check for auto-actions
+async function addWarningAndCheckActions(guild, user, reason) {
+  try {
+    await Warnings.create({
+      userId: user.id,
+      guildId: guild.id,
+      reason: reason,
+      moderatorId: client.user.id,
+      timestamp: new Date(),
+    });
+
+    const warnCount = await Warnings.count({
+      where: { guildId: guild.id, userId: user.id },
+    });
+
+    const config = await AutoModConfig.findOne({ where: { guildId: guild.id } });
+    if (!config) return warnCount;
+
+    const member = await guild.members.fetch(user.id).catch(() => null);
+    if (!member) return warnCount;
+
+    if (warnCount >= config.autoBanThreshold) {
+      await member.ban({ reason: `Auto-ban: ${warnCount} warnings` }).catch(() => {});
+      await logEvent(guild, `🔨 Auto-banned ${user.tag} (${warnCount} warnings)`);
+    } else if (warnCount >= config.autoKickThreshold) {
+      await member.kick(`Auto-kick: ${warnCount} warnings`).catch(() => {});
+      await logEvent(guild, `👢 Auto-kicked ${user.tag} (${warnCount} warnings)`);
+    } else if (warnCount >= config.autoMuteThreshold) {
+      const muteRole = guild.roles.cache.find(r => r.name === 'Muted');
+      if (muteRole) {
+        await member.roles.add(muteRole).catch(() => {});
+        await logEvent(guild, `🔇 Auto-muted ${user.tag} (${warnCount} warnings)`);
+      }
+    }
+
+    return warnCount;
+  } catch (err) {
+    console.error('addWarningAndCheckActions error:', err);
+    return 0;
+  }
+}
+
 // ============== BOT: MODERATION FILTERS ==============
 client.on('messageCreate', async message => {
   try {
@@ -385,6 +410,13 @@ client.on('messageCreate', async message => {
     const member = message.member;
     const isOwner = (OWNER_ID && message.author.id === OWNER_ID) || member.roles.cache.some(r => r.name === 'Owner');
     if (isOwner) return;
+
+    const now = Date.now();
+
+    let config = await AutoModConfig.findOne({ where: { guildId: message.guild.id } });
+    if (!config) {
+      config = await AutoModConfig.create({ guildId: message.guild.id });
+    }
 
     // Check attachment rules
     if (message.attachments.size > 0) {
@@ -413,49 +445,97 @@ client.on('messageCreate', async message => {
       }
     }
 
+    // Word filter check
+    const wordFilters = await WordFilter.findAll({
+      where: { guildId: message.guild.id, enabled: true },
+    });
+
+    for (const filter of wordFilters) {
+      if (message.content.toLowerCase().includes(filter.word.toLowerCase())) {
+        await message.delete().catch(() => {});
+        
+        if (filter.action === 'warn') {
+          const warnCount = await addWarningAndCheckActions(message.guild, message.author, `Used filtered word: ${filter.word}`);
+          await message.channel.send(`${message.author}, you have been warned for using a filtered word. (Warning ${warnCount})`).then(msg => {
+            setTimeout(() => msg.delete().catch(() => {}), 10000);
+          });
+        } else if (filter.action === 'mute') {
+          const muteRole = message.guild.roles.cache.find(r => r.name === 'Muted');
+          if (muteRole) {
+            await member.roles.add(muteRole).catch(() => {});
+            await logEvent(message.guild, `🔇 Muted ${message.author.tag} for using filtered word: ${filter.word}`);
+          }
+        }
+        
+        await logEvent(message.guild, `🚫 Deleted message from ${message.author.tag} containing filtered word: ${filter.word}`);
+        return;
+      }
+    }
+
+    // @everyone spam
     if (message.mentions.everyone) {
       await message.delete().catch(() => {});
       await logEvent(message.guild, `🚫 Deleted @everyone message from ${message.author.tag}`);
       return;
     }
 
-    const linkRegex = /(discord\.gg|discordapp\.com\/invite|youtube\.com|youtu\.be|spotify\.com)/i;
-    if (linkRegex.test(message.content)) {
-      await message.delete().catch(() => {});
-      await logEvent(message.guild, `🔗 Deleted link message from ${message.author.tag}: ${message.content}`);
-      return;
-    }
-
-    const now = Date.now();
-    const window = messageWindows.get(message.author.id) || [];
-    window.push(now);
-    const cutoff = now - 2000;
-    const recent = window.filter(t => t > cutoff);
-    messageWindows.set(message.author.id, recent);
-    if (recent.length >= 5) {
-      try {
-        const fetched = await message.channel.messages.fetch({ limit: 20 });
-        const userMsgs = fetched.filter(m => m.author.id === message.author.id && Date.now() - m.createdTimestamp < 5000);
-        for (const m of userMsgs.values()) await m.delete().catch(() => {});
-      } catch (err) { }
-      await logEvent(message.guild, `💨 Anti-spam: Deleted messages from ${message.author.tag}`);
-      return;
-    }
-
-    // Duplicate message detection
-    if (!global.userLastMessages) global.userLastMessages = new Map();
-    const userLastMsg = global.userLastMessages.get(message.author.id);
-    if (userLastMsg && userLastMsg.content === message.content && userLastMsg.content.length > 10) {
-      const timeDiff = now - userLastMsg.timestamp;
-      if (timeDiff < 30000) { // Same message within 30 seconds
+    // Link filtering (configurable)
+    if (config.linkFilterEnabled) {
+      const linkRegex = /(discord\.gg|discordapp\.com\/invite|youtube\.com|youtu\.be|spotify\.com|https?:\/\/)/i;
+      if (linkRegex.test(message.content)) {
         await message.delete().catch(() => {});
-        await logEvent(message.guild, `📋 Duplicate message deleted from ${message.author.tag}`);
+        await logEvent(message.guild, `🔗 Deleted link message from ${message.author.tag}: ${message.content}`);
         return;
       }
     }
-    global.userLastMessages.set(message.author.id, { content: message.content, timestamp: now });
 
-    // Emoji spam detection (more than 10 custom Discord emojis)
+    // Spam detection (configurable)
+    if (config.spamEnabled) {
+      const window = messageWindows.get(message.author.id) || [];
+      window.push(now);
+      const cutoff = now - config.spamTimeWindow;
+      const recent = window.filter(t => t > cutoff);
+      messageWindows.set(message.author.id, recent);
+      
+      if (recent.length >= config.spamMessageLimit) {
+        try {
+          const fetched = await message.channel.messages.fetch({ limit: 20 });
+          const userMsgs = fetched.filter(m => m.author.id === message.author.id && Date.now() - m.createdTimestamp < config.spamTimeWindow);
+          for (const m of userMsgs.values()) await m.delete().catch(() => {});
+        } catch (err) { }
+        
+        if (config.spamMuteEnabled) {
+          const muteRole = message.guild.roles.cache.find(r => r.name === 'Muted');
+          if (muteRole) {
+            await member.roles.add(muteRole).catch(() => {});
+            await logEvent(message.guild, `🔇 Auto-muted ${message.author.tag} for spamming`);
+            setTimeout(async () => {
+              await member.roles.remove(muteRole).catch(() => {});
+            }, config.spamMuteDuration);
+          }
+        }
+        
+        await logEvent(message.guild, `💨 Anti-spam: Deleted messages from ${message.author.tag}`);
+        return;
+      }
+    }
+
+    // Duplicate message detection (configurable)
+    if (config.duplicateMessageEnabled) {
+      if (!global.userLastMessages) global.userLastMessages = new Map();
+      const userLastMsg = global.userLastMessages.get(message.author.id);
+      if (userLastMsg && userLastMsg.content === message.content && userLastMsg.content.length > 10) {
+        const timeDiff = now - userLastMsg.timestamp;
+        if (timeDiff < 30000) {
+          await message.delete().catch(() => {});
+          await logEvent(message.guild, `📋 Duplicate message deleted from ${message.author.tag}`);
+          return;
+        }
+      }
+      global.userLastMessages.set(message.author.id, { content: message.content, timestamp: now });
+    }
+
+    // Emoji spam detection
     const emojiCount = (message.content.match(/<a?:\w+:\d+>/g) || []).length;
     if (emojiCount > 10) {
       await message.delete().catch(() => {});
@@ -463,7 +543,7 @@ client.on('messageCreate', async message => {
       return;
     }
 
-    // Caps lock filter (more than 70% caps and longer than 10 chars)
+    // Caps lock filter
     if (message.content.length > 10) {
       const letters = message.content.replace(/[^a-zA-Z]/g, '');
       if (letters.length > 10) {
@@ -477,8 +557,8 @@ client.on('messageCreate', async message => {
       }
     }
 
-    // Mention spam protection (more than 5 user mentions)
-    if (message.mentions.users.size > 5) {
+    // Mention spam protection (configurable)
+    if (config.mentionSpamEnabled && message.mentions.users.size > config.mentionSpamLimit) {
       await message.delete().catch(() => {});
       await logEvent(message.guild, `👥 Mention spam deleted from ${message.author.tag} (${message.mentions.users.size} mentions)`);
       return;
