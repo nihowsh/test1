@@ -56,10 +56,20 @@ async function downloadVideo(url, outputTemplate) {
     url
   ];
   
-  const result = await spawnPromise('yt-dlp', args);
+  let result;
+  try {
+    result = await spawnPromise('yt-dlp', args);
+  } catch (error) {
+    console.error('yt-dlp error:', error.message);
+    throw new Error(`yt-dlp failed: ${error.message.substring(0, 100)}`);
+  }
+  
   const downloadedFile = result.stdout.trim().split('\n').pop();
+  console.log('yt-dlp stdout:', result.stdout);
+  console.log('Downloaded file path:', downloadedFile);
   
   if (!downloadedFile || !(await fs.access(downloadedFile).then(() => true).catch(() => false))) {
+    console.error('File verification failed. stdout:', result.stdout);
     throw new Error('Download failed - video file was not created');
   }
   
