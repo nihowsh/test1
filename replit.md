@@ -4,9 +4,12 @@
 This is a feature-rich Discord bot (bot.js) with integrated selfbot functionality for mass DM features. The selfbot is triggered via the `/selfbot` command and runs within the same bot process.
 
 ## Current Status
-- Imported from GitHub and configured for Replit
+- ✅ Successfully migrated to Replit environment (November 14, 2025)
+- ✅ All packages installed and configured
+- ✅ Workflow configured and running
 - Database: SQLite for persistent storage
 - Keep-alive server: Running on port 3000
+- **Next**: Add BOT_TOKEN to environment secrets to activate the bot
 
 ## Bot Features
 - **Moderation (31 commands)**: kick, ban, mute, warn, purge, lock/unlock, lockdown/unlockdown, slowmode, nickname, addrole, removerole, nuke channel, view warnings, clear warnings
@@ -78,7 +81,7 @@ This is a feature-rich Discord bot (bot.js) with integrated selfbot functionalit
 **Note**: Only bot.js runs. The selfbot functionality is built into bot.js and triggered by the `/selfbot` command.
 
 ## Passcode-Protected Commands
-These commands require passcode `Bella@294` - **even owner cannot bypass**:
+These commands require a passcode (set via PASSCODE environment variable) - **even owner cannot bypass**:
 - `/massdm` - Mass DM all server members
 - `/selfbot` - Trigger mass DM using user account token
 - `/stopbroadcast` - Stop ongoing broadcast
