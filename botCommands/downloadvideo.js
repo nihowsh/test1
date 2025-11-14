@@ -36,7 +36,6 @@ async function downloadVideo(url, outputPath) {
   }
   
   const args = [
-    '--update',
     '--format', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/bestvideo+bestaudio/best',
     '--merge-output-format', 'mp4',
     '--remux-video', 'mp4',
@@ -50,10 +49,6 @@ async function downloadVideo(url, outputPath) {
     '--no-playlist',
     '--geo-bypass',
     '--age-limit', '0',
-    '--write-thumbnail',
-    '--convert-thumbnails', 'jpg',
-    '--embed-thumbnail',
-    '--add-metadata',
     '--compat-options', 'no-youtube-channel-redirect',
     '--extractor-args', 'youtube:player_client=android,web',
     '--output', outputPath,
