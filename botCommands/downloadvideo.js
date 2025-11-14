@@ -214,8 +214,7 @@ module.exports = {
           
           await interaction.followUp({
             content: `✅ **Video ${videoNum}** - ${sizeInMB}MB${compressNote}`,
-            files: [finalPath],
-            ephemeral: true
+            files: [finalPath]
           });
 
           successful++;
