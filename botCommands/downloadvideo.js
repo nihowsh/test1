@@ -93,14 +93,14 @@ async function downloadVideoYTDLP(url, outputPath) {
   }
   
   const args = [
-    '--format', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+    '--format', 'best[ext=mp4]/bestvideo*+bestaudio/best',
     '--merge-output-format', 'mp4',
-    '--remux-video', 'mp4',
     '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     '--no-check-certificates',
     '--extractor-retries', '10',
     '--retries', '15',
     '--no-playlist',
+    '--extractor-args', 'youtube:player_client=android',
     '--output', outputPath,
     url
   ];
