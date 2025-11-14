@@ -12,10 +12,21 @@ function spawnPromise(command, args) {
     let stdout = '';
     let stderr = '';
     
-    proc.stdout.on('data', (data) => { stdout += data.toString(); });
-    proc.stderr.on('data', (data) => { stderr += data.toString(); });
+    proc.stdout.on('data', (data) => { 
+      const str = data.toString();
+      stdout += str;
+      console.log('STDOUT chunk:', str);
+    });
+    proc.stderr.on('data', (data) => { 
+      const str = data.toString();
+      stderr += str;
+      console.log('STDERR chunk:', str);
+    });
     
     proc.on('close', (code) => {
+      console.log(`Process exited with code ${code}`);
+      console.log('Final stdout:', stdout);
+      console.log('Final stderr:', stderr);
       if (code === 0) {
         resolve({ stdout, stderr });
       } else {
@@ -24,6 +35,7 @@ function spawnPromise(command, args) {
     });
     
     proc.on('error', (err) => {
+      console.log('Process error:', err);
       reject(err);
     });
   });
