@@ -2,31 +2,21 @@ const { SlashCommandBuilder } = require('discord.js');
 const { spawn } = require('child_process');
 const fs = require('fs').promises;
 const path = require('path');
+const axios = require('axios');
+const https = require('https');
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit for compression
 
-// Safe command execution using spawn with argument arrays (no shell injection)
 function spawnPromise(command, args) {
   return new Promise((resolve, reject) => {
     const proc = spawn(command, args);
     let stdout = '';
     let stderr = '';
     
-    proc.stdout.on('data', (data) => { 
-      const str = data.toString();
-      stdout += str;
-      console.log('STDOUT chunk:', str);
-    });
-    proc.stderr.on('data', (data) => { 
-      const str = data.toString();
-      stderr += str;
-      console.log('STDERR chunk:', str);
-    });
+    proc.stdout.on('data', (data) => { stdout += data.toString(); });
+    proc.stderr.on('data', (data) => { stderr += data.toString(); });
     
     proc.on('close', (code) => {
-      console.log(`Process exited with code ${code}`);
-      console.log('Final stdout:', stdout);
-      console.log('Final stderr:', stderr);
       if (code === 0) {
         resolve({ stdout, stderr });
       } else {
@@ -35,57 +25,104 @@ function spawnPromise(command, args) {
     });
     
     proc.on('error', (err) => {
-      console.log('Process error:', err);
       reject(err);
     });
   });
 }
 
-async function downloadVideo(url, outputTemplate) {
-  // Validate URL format (basic security check)
+async function downloadFileFromURL(url, outputPath) {
+  const writer = require('fs').createWriteStream(outputPath);
+  
+  const response = await axios({
+    url,
+    method: 'GET',
+    responseType: 'stream',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
+  });
+  
+  response.data.pipe(writer);
+  
+  return new Promise((resolve, reject) => {
+    writer.on('finish', resolve);
+    writer.on('error', reject);
+  });
+}
+
+async function getRedGifsVideo(url) {
+  const match = url.match(/redgifs\.com\/watch\/([a-zA-Z0-9]+)/i);
+  if (!match) {
+    throw new Error('Invalid RedGifs URL');
+  }
+  
+  const videoId = match[1];
+  
+  try {
+    const tokenResponse = await axios.get('https://api.redgifs.com/v2/auth/temporary', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    
+    const token = tokenResponse.data.token;
+    
+    const videoResponse = await axios.get(`https://api.redgifs.com/v2/gifs/${videoId}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    
+    const videoData = videoResponse.data.gif;
+    const videoUrl = videoData.urls.hd || videoData.urls.sd;
+    
+    return {
+      url: videoUrl,
+      duration: videoData.duration,
+      thumbnail: videoData.urls.thumbnail
+    };
+  } catch (error) {
+    throw new Error(`RedGifs API error: ${error.message}`);
+  }
+}
+
+async function downloadVideoYTDLP(url, outputPath) {
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     throw new Error('Invalid URL: must start with http:// or https://');
   }
   
   const args = [
-    '--format', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/bestvideo+bestaudio/best',
+    '--format', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
     '--merge-output-format', 'mp4',
     '--remux-video', 'mp4',
-    '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     '--no-check-certificates',
-    '--no-warnings',
     '--extractor-retries', '10',
-    '--fragment-retries', '10',
     '--retries', '15',
-    '--socket-timeout', '30',
     '--no-playlist',
-    '--geo-bypass',
-    '--age-limit', '0',
-    '--compat-options', 'no-youtube-channel-redirect',
-    '--extractor-args', 'youtube:player_client=android,web',
-    '--print', 'after_move:filepath',
-    '--output', outputTemplate,
+    '--output', outputPath,
     url
   ];
   
-  let result;
-  try {
-    result = await spawnPromise('yt-dlp', args);
-  } catch (error) {
-    console.error('yt-dlp error:', error.message);
-    throw new Error(`yt-dlp failed: ${error.message.substring(0, 100)}`);
+  await spawnPromise('yt-dlp', args);
+  
+  const exists = await fs.access(outputPath).then(() => true).catch(() => false);
+  if (!exists) {
+    throw new Error('Download failed - file not created');
   }
   
-  const downloadedFile = result.stdout.trim().split('\n').pop();
-  console.log('yt-dlp stdout:', result.stdout);
-  console.log('Downloaded file path:', downloadedFile);
-  
-  if (!downloadedFile || !(await fs.access(downloadedFile).then(() => true).catch(() => false))) {
-    console.error('File verification failed. stdout:', result.stdout);
-    throw new Error('Download failed - video file was not created');
+  return outputPath;
+}
+
+async function downloadVideo(url, outputPath) {
+  if (url.includes('redgifs.com')) {
+    const videoData = await getRedGifsVideo(url);
+    await downloadFileFromURL(videoData.url, outputPath);
+    return outputPath;
+  } else {
+    return await downloadVideoYTDLP(url, outputPath);
   }
-  
-  return downloadedFile;
 }
 
 async function getVideoDuration(inputPath) {
@@ -102,7 +139,7 @@ async function getVideoDuration(inputPath) {
 
 async function compressVideo(inputPath, outputPath, targetSize) {
   const duration = await getVideoDuration(inputPath);
-  const targetBitrate = Math.floor((targetSize * 8) / duration / 1000 * 0.9); // 90% margin
+  const targetBitrate = Math.floor((targetSize * 8) / duration / 1000 * 0.9);
   
   const args = [
     '-i', inputPath,
@@ -111,7 +148,7 @@ async function compressVideo(inputPath, outputPath, targetSize) {
     '-c:a', 'aac',
     '-b:a', '128k',
     '-movflags', '+faststart',
-    '-y', // Overwrite output file
+    '-y',
     outputPath
   ];
   
@@ -200,14 +237,12 @@ module.exports = {
         const videoNum = i + 1;
         const timestamp = Date.now();
         const originalPath = path.join(tempDir, `video_${timestamp}_${videoNum}.mp4`);
-        const compressedPath = path.join(tempDir, `compressed_${timestamp}_${videoNum}.mp4`);
 
         try {
           await interaction.editReply({
             content: `⏳ **Processing video ${videoNum}/${links.length}...**\n\nDownloading from: ${url.substring(0, 50)}...`
           });
 
-          // Download video
           const downloadedPath = await downloadVideo(url, originalPath);
           filesToCleanup.push(downloadedPath);
           
@@ -215,7 +250,6 @@ module.exports = {
           let fileSize = await getFileSize(downloadedPath);
           let compressed = false;
 
-          // Compress if file size is too large
           if (fileSize > MAX_FILE_SIZE) {
             compressed = true;
             let compressionAttempt = 0;
@@ -229,7 +263,6 @@ module.exports = {
                 content: `⏳ **Processing video ${videoNum}/${links.length}...**\n\nFile too large (${(fileSize / 1024 / 1024).toFixed(1)}MB), compressing (attempt ${compressionAttempt})...`
               });
 
-              // Reduce target size more aggressively with each attempt
               targetSize = MAX_FILE_SIZE * (0.85 ** compressionAttempt);
               
               const tempCompressedPath = path.join(tempDir, `compressed_${timestamp}_${videoNum}_attempt${compressionAttempt}.mp4`);
@@ -241,18 +274,15 @@ module.exports = {
               currentInputPath = tempCompressedPath;
             }
             
-            // Final check after all compression attempts
             if (fileSize > MAX_FILE_SIZE) {
               throw new Error(`Unable to compress below 10MB after ${compressionAttempt} attempts. Final size: ${(fileSize / 1024 / 1024).toFixed(1)}MB`);
             }
           }
 
-          // Final size check before upload
           if (fileSize > MAX_FILE_SIZE) {
-            throw new Error(`File size ${(fileSize / 1024 / 1024).toFixed(1)}MB exceeds Discord limit`);
+            throw new Error(`File size ${(fileSize / 1024 / 1024).toFixed(1)}MB exceeds limit`);
           }
 
-          // Send video
           const sizeInMB = (fileSize / 1024 / 1024).toFixed(1);
           const compressNote = compressed ? ' (compressed)' : '';
           
@@ -271,13 +301,11 @@ module.exports = {
         }
       }
 
-      // Final summary
       await interaction.editReply({
         content: `🎬 **Download Complete!**\n\n✅ Successful: **${successful}**\n❌ Failed: **${failed}**\n\n${results.join('\n')}`,
       });
 
     } finally {
-      // Always clean up temp files
       for (const file of filesToCleanup) {
         try {
           await fs.unlink(file);
@@ -286,7 +314,6 @@ module.exports = {
         }
       }
       
-      // Clean up temp directory
       try {
         const files = await fs.readdir(tempDir);
         for (const file of files) {
