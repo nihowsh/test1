@@ -3,7 +3,7 @@ const { spawn } = require('child_process');
 const fs = require('fs').promises;
 const path = require('path');
 
-const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB Discord limit (regular servers)
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit for compression
 
 // Safe command execution using spawn with argument arrays (no shell injection)
 function spawnPromise(command, args) {
