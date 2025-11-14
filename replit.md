@@ -12,15 +12,17 @@ This is a feature-rich Discord bot (bot.js) with integrated selfbot functionalit
 - **Next**: Add BOT_TOKEN to environment secrets to activate the bot
 
 ## Bot Features
-- **Moderation (31 commands)**: kick, ban, mute, warn, purge, lock/unlock, lockdown/unlockdown, slowmode, nickname, addrole, removerole, nuke channel, view warnings, clear warnings
+- **Moderation (33 commands)**: kick, ban, mute, warn, purge, lock/unlock, lockdown/unlockdown, slowmode, nickname, addrole, removerole, nuke channel, view warnings, clear warnings
 - **Logging**: Commands, message edits/deletes, moderation actions
 - **Server Stats**: Analytics and member tracking
 - **Invite Tracking**: Auto-role rewards based on invite count
-- **Auto-moderation**: Spam detection, link blocking, @everyone protection
+- **Auto-moderation**: Advanced spam detection with duplicate messages, emoji spam, caps lock filter, mention spam, anti-raid protection
+- **Attachment Rules**: Enforce phrase requirements for attachments in specific channels
+- **Scheduled Mentions**: Auto-post @everyone at configured intervals with instant deletion
 - **Selfbot Integration**: Mass DM via `/selfbot` command with progress reports to channel
 - **Broadcast Control**: `/stopbroadcast` to halt ongoing mass DM
 - **Server Cloning**: Save/load server templates with roles, channels, permissions (using unique codes)
-- **Video Downloader**: Download videos from YouTube, TikTok, Instagram, Redgifs, Snapchat (up to 10 at once) with auto-compression
+- **Video Downloader**: Download videos from YouTube, TikTok, Instagram, Redgifs, Snapchat (up to 10 at once) with ephemeral responses
 - **Heartbeat Monitoring**: Periodic status updates
 
 ## Configuration
@@ -40,6 +42,27 @@ This is a feature-rich Discord bot (bot.js) with integrated selfbot functionalit
 - Shared database module (`database.js`) for consistent data persistence
 
 ## Recent Changes
+### November 14, 2025 - Major Feature Enhancements
+- ✅ **NEW /attachmentrules**: Enforce phrase/format requirements for attachments in specific channels
+  - Auto-deletes non-compliant attachments
+  - Per-channel configuration with add/remove/list subcommands
+  - Sends DM notifications to users explaining what's required
+- ✅ **NEW /schedulemention**: Auto-schedule @everyone mentions with instant deletion
+  - Configure interval per channel (e.g., every 2 hours)
+  - Background scheduler checks every minute and sends @everyone when interval elapsed
+  - Messages deleted immediately (100ms) to avoid spam
+- ✅ **ENHANCED /downloadvideo**: Now supports multiple simultaneous links and ephemeral responses
+  - All responses are ephemeral (only visible to command user)
+  - Download multiple videos at once (up to 10)
+  - Improved yt-dlp format selector for better compatibility
+- ✅ **ENHANCED Auto-moderation**: Added 5 new auto-mod features
+  - Duplicate message detection (same message 3+ times in 10 seconds)
+  - Emoji spam protection (10+ emojis triggers warning)
+  - Caps lock filter (70%+ caps in messages over 10 chars triggers warning)
+  - Mention spam protection (5+ mentions triggers warning)
+  - Anti-raid detection (5+ joins in 10 seconds locks server)
+- ✅ **IMPROVED selfbot and massdm**: All status messages now sent to command channel instead of console
+
 ### November 13, 2025 - Critical Bug Fixes
 - ✅ **FIXED serverstats**: Resolved "Invalid number value" error by consolidating embed fields from 27 to 11 (Discord max is 25)
 - ✅ **FIXED downloadvideo**: Updated yt-dlp format selector to handle YouTube's SABR streaming and modern video platforms
@@ -92,7 +115,7 @@ These commands require a passcode (set via PASSCODE environment variable) - **ev
 
 **Recommendation**: Web Service works but may sleep on free tier. Use UptimeRobot to keep it awake, or upgrade to Starter plan ($7/month).
 
-## All Available Commands (31 Total)
+## All Available Commands (33 Total)
 
 ### Moderation (19 commands)
 - `/ban`, `/kick`, `/mute`, `/unmute`, `/unban` - Basic moderation
@@ -114,11 +137,13 @@ These commands require a passcode (set via PASSCODE environment variable) - **ev
 - `/modrules` - Set server rules
 - `/automod` - Configure auto-moderation
 
-### Special Features (4 commands)
+### Special Features (6 commands)
 - `/selfbot` - Mass DM with progress reports (passcode protected)
 - `/massdm` - Alternative mass DM (passcode protected)
 - `/stopbroadcast` - Stop ongoing broadcast
-- `/downloadvideo` - Download videos from YouTube/TikTok/Instagram/Redgifs (up to 10 at once)
+- `/downloadvideo` - Download videos from YouTube/TikTok/Instagram/Redgifs (up to 10 at once, ephemeral responses)
+- `/attachmentrules` - Enforce phrase requirements for attachments in channels (add/remove/list)
+- `/schedulemention` - Schedule automatic @everyone mentions with instant deletion (add/remove/list)
 
 ### Invite System (2 commands)
 - `/manageinviteroles` - Manage invite reward roles
