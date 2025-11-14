@@ -29,7 +29,7 @@ function spawnPromise(command, args) {
   });
 }
 
-async function downloadVideo(url, outputPath) {
+async function downloadVideo(url, outputTemplate) {
   // Validate URL format (basic security check)
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     throw new Error('Invalid URL: must start with http:// or https://');
@@ -51,11 +51,19 @@ async function downloadVideo(url, outputPath) {
     '--age-limit', '0',
     '--compat-options', 'no-youtube-channel-redirect',
     '--extractor-args', 'youtube:player_client=android,web',
-    '--output', outputPath,
+    '--print', 'after_move:filepath',
+    '--output', outputTemplate,
     url
   ];
   
-  await spawnPromise('yt-dlp', args);
+  const result = await spawnPromise('yt-dlp', args);
+  const downloadedFile = result.stdout.trim().split('\n').pop();
+  
+  if (!downloadedFile || !(await fs.access(downloadedFile).then(() => true).catch(() => false))) {
+    throw new Error('Download failed - video file was not created');
+  }
+  
+  return downloadedFile;
 }
 
 async function getVideoDuration(inputPath) {
@@ -178,18 +186,18 @@ module.exports = {
           });
 
           // Download video
-          await downloadVideo(url, originalPath);
-          filesToCleanup.push(originalPath);
+          const downloadedPath = await downloadVideo(url, originalPath);
+          filesToCleanup.push(downloadedPath);
           
-          let finalPath = originalPath;
-          let fileSize = await getFileSize(originalPath);
+          let finalPath = downloadedPath;
+          let fileSize = await getFileSize(downloadedPath);
           let compressed = false;
 
           // Compress if file size is too large
           if (fileSize > MAX_FILE_SIZE) {
             compressed = true;
             let compressionAttempt = 0;
-            let currentInputPath = originalPath;
+            let currentInputPath = downloadedPath;
             let targetSize = MAX_FILE_SIZE;
             
             while (fileSize > MAX_FILE_SIZE && compressionAttempt < 5) {
