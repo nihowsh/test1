@@ -185,21 +185,35 @@ module.exports = {
           let fileSize = await getFileSize(originalPath);
           let compressed = false;
 
-          // Verify file size before compression
+          // Compress if file size is too large
           if (fileSize > MAX_FILE_SIZE) {
-            await interaction.editReply({
-              content: `⏳ **Processing video ${videoNum}/${links.length}...**\n\nFile too large (${(fileSize / 1024 / 1024).toFixed(1)}MB), compressing...`
-            });
-
-            await compressVideo(originalPath, compressedPath, MAX_FILE_SIZE);
-            filesToCleanup.push(compressedPath);
-            finalPath = compressedPath;
-            fileSize = await getFileSize(compressedPath);
             compressed = true;
+            let compressionAttempt = 0;
+            let currentInputPath = originalPath;
+            let targetSize = MAX_FILE_SIZE;
             
-            // Verify compressed file is under limit
+            while (fileSize > MAX_FILE_SIZE && compressionAttempt < 5) {
+              compressionAttempt++;
+              
+              await interaction.editReply({
+                content: `⏳ **Processing video ${videoNum}/${links.length}...**\n\nFile too large (${(fileSize / 1024 / 1024).toFixed(1)}MB), compressing (attempt ${compressionAttempt})...`
+              });
+
+              // Reduce target size more aggressively with each attempt
+              targetSize = MAX_FILE_SIZE * (0.85 ** compressionAttempt);
+              
+              const tempCompressedPath = path.join(tempDir, `compressed_${timestamp}_${videoNum}_attempt${compressionAttempt}.mp4`);
+              await compressVideo(currentInputPath, tempCompressedPath, targetSize);
+              filesToCleanup.push(tempCompressedPath);
+              
+              finalPath = tempCompressedPath;
+              fileSize = await getFileSize(tempCompressedPath);
+              currentInputPath = tempCompressedPath;
+            }
+            
+            // Final check after all compression attempts
             if (fileSize > MAX_FILE_SIZE) {
-              throw new Error(`Compressed file still too large: ${(fileSize / 1024 / 1024).toFixed(1)}MB`);
+              throw new Error(`Unable to compress below 10MB after ${compressionAttempt} attempts. Final size: ${(fileSize / 1024 / 1024).toFixed(1)}MB`);
             }
           }
 
