@@ -4,6 +4,7 @@ const Sequelize = require('sequelize');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
+const { AttachmentRules: SharedAttachmentRules } = require('./database');
 require('dotenv').config();
 
 // ============== CONFIGURATION ==============
@@ -135,7 +136,34 @@ const LogSettings = sequelize.define("logSettings", {
   },
 });
 
+// Scheduled mentions for auto-mentioning @everyone
+const ScheduledMentions = sequelize.define("scheduledMentions", {
+  guildId: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  channelId: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  intervalHours: {
+    type: Sequelize.INTEGER,
+    defaultValue: 2,
+  },
+  lastMentionTime: {
+    type: Sequelize.DATE,
+    allowNull: true,
+  },
+  enabled: {
+    type: Sequelize.BOOLEAN,
+    defaultValue: true,
+  },
+});
+
 sequelize.sync();
+
+// Expose models to client for command access
+client.scheduledMentionsModel = ScheduledMentions;
 
 // ============== PERSISTENCE FILES ==============
 const inviteCountsFile = path.join(__dirname, 'invite_counts.json');
@@ -266,12 +294,26 @@ client.on('inviteDelete', invite => {
 });
 
 // ============== BOT: MEMBER JOIN HANDLER ==============
+// Anti-raid tracking
+if (!global.guildJoinTimestamps) global.guildJoinTimestamps = new Map();
+
 client.on('guildMemberAdd', async member => {
   try {
     const guild = member.guild;
     const accountAgeMs = Date.now() - member.user.createdTimestamp;
     const threeDaysMs = 1000 * 60 * 60 * 24 * 3;
     const isAlt = accountAgeMs < threeDaysMs;
+
+    // Anti-raid detection
+    const now = Date.now();
+    const guildJoins = global.guildJoinTimestamps.get(guild.id) || [];
+    guildJoins.push(now);
+    const recentJoins = guildJoins.filter(t => now - t < 10000); // Last 10 seconds
+    global.guildJoinTimestamps.set(guild.id, recentJoins);
+    
+    if (recentJoins.length >= 5) {
+      await logEvent(guild, `🚨 **RAID ALERT!** ${recentJoins.length} members joined in the last 10 seconds!`);
+    }
 
     let usedInviterId = null;
     try {
@@ -344,6 +386,33 @@ client.on('messageCreate', async message => {
     const isOwner = (OWNER_ID && message.author.id === OWNER_ID) || member.roles.cache.some(r => r.name === 'Owner');
     if (isOwner) return;
 
+    // Check attachment rules
+    if (message.attachments.size > 0) {
+      const rule = await SharedAttachmentRules.findOne({
+        where: {
+          guildId: message.guild.id,
+          channelId: message.channel.id,
+          enabled: true,
+        },
+      });
+
+      if (rule) {
+        const hasRequiredPhrase = message.content.toLowerCase().includes(rule.requiredPhrase.toLowerCase());
+        if (!hasRequiredPhrase) {
+          try {
+            await message.delete();
+            await message.channel.send(`${message.author}, your message was deleted because attachments in this channel must include the phrase: \`${rule.requiredPhrase}\``).then(msg => {
+              setTimeout(() => msg.delete().catch(() => {}), 10000);
+            });
+            await logEvent(message.guild, `📎 Deleted attachment from ${message.author.tag} in ${message.channel.name}: Missing required phrase "${rule.requiredPhrase}"`);
+          } catch (err) {
+            console.error('Failed to delete attachment rule violation:', err);
+          }
+          return;
+        }
+      }
+    }
+
     if (message.mentions.everyone) {
       await message.delete().catch(() => {});
       await logEvent(message.guild, `🚫 Deleted @everyone message from ${message.author.tag}`);
@@ -370,6 +439,48 @@ client.on('messageCreate', async message => {
         for (const m of userMsgs.values()) await m.delete().catch(() => {});
       } catch (err) { }
       await logEvent(message.guild, `💨 Anti-spam: Deleted messages from ${message.author.tag}`);
+      return;
+    }
+
+    // Duplicate message detection
+    if (!global.userLastMessages) global.userLastMessages = new Map();
+    const userLastMsg = global.userLastMessages.get(message.author.id);
+    if (userLastMsg && userLastMsg.content === message.content && userLastMsg.content.length > 10) {
+      const timeDiff = now - userLastMsg.timestamp;
+      if (timeDiff < 30000) { // Same message within 30 seconds
+        await message.delete().catch(() => {});
+        await logEvent(message.guild, `📋 Duplicate message deleted from ${message.author.tag}`);
+        return;
+      }
+    }
+    global.userLastMessages.set(message.author.id, { content: message.content, timestamp: now });
+
+    // Emoji spam detection (more than 10 custom Discord emojis)
+    const emojiCount = (message.content.match(/<a?:\w+:\d+>/g) || []).length;
+    if (emojiCount > 10) {
+      await message.delete().catch(() => {});
+      await logEvent(message.guild, `😀 Emoji spam deleted from ${message.author.tag} (${emojiCount} custom emojis)`);
+      return;
+    }
+
+    // Caps lock filter (more than 70% caps and longer than 10 chars)
+    if (message.content.length > 10) {
+      const letters = message.content.replace(/[^a-zA-Z]/g, '');
+      if (letters.length > 10) {
+        const capsCount = (message.content.match(/[A-Z]/g) || []).length;
+        const capsPercentage = (capsCount / letters.length) * 100;
+        if (capsPercentage > 70) {
+          await message.delete().catch(() => {});
+          await logEvent(message.guild, `🔠 Excessive caps deleted from ${message.author.tag}`);
+          return;
+        }
+      }
+    }
+
+    // Mention spam protection (more than 5 user mentions)
+    if (message.mentions.users.size > 5) {
+      await message.delete().catch(() => {});
+      await logEvent(message.guild, `👥 Mention spam deleted from ${message.author.tag} (${message.mentions.users.size} mentions)`);
       return;
     }
   } catch (err) { console.error('messageCreate filter error', err); }
@@ -468,6 +579,19 @@ function watchSelfbotTrigger() {
       if (!data.serverId || !data.message || !data.userToken) return;
       if (data.timestamp && data.timestamp <= lastTriggerTimestamp) return;
       
+      // Helper function to send message to both console and channel
+      const sendUpdate = async (message) => {
+        console.log(message);
+        if (data.channelId) {
+          try {
+            const channel = await client.channels.fetch(data.channelId);
+            if (channel) await channel.send(message);
+          } catch (err) {
+            console.log(`⚠️ Could not send update to channel: ${err.message}`);
+          }
+        }
+      };
+      
       // Only process triggers from the last 10 minutes (prevent old triggers)
       const triggerAge = Date.now() - data.timestamp;
       if (triggerAge > 600000) {
@@ -494,32 +618,33 @@ function watchSelfbotTrigger() {
         try {
           await selfbotClient.login(data.userToken);
           loginSuccess = true;
-          console.log(`✅ Selfbot logged in as ${selfbotClient.user.tag}`);
+          await sendUpdate(`✅ Selfbot logged in as ${selfbotClient.user.tag}`);
         } catch (err) {
-          console.error(`❌ Failed to login selfbot:`, err.message);
+          await sendUpdate(`❌ **Failed to login selfbot:** ${err.message}\n\nPlease check that your user token is valid and try again.`);
+          fs.unlinkSync(triggerFile);
           return;
         }
         
         if (loginSuccess) {
           // Wait for guilds to properly load - increased timeout
-          console.log('⏳ Waiting for guilds to load...');
+          await sendUpdate('⏳ Waiting for guilds to load...');
           await sleep(8000); // 8 seconds for full initialization
           
-          console.log(`📊 Selfbot has access to ${selfbotClient.guilds.cache.size} servers`);
+          await sendUpdate(`📊 Selfbot has access to ${selfbotClient.guilds.cache.size} servers`);
           
           if (selfbotClient.guilds.cache.size === 0) {
-            console.log('⚠️ No servers loaded yet, waiting another 5 seconds...');
+            await sendUpdate('⚠️ No servers loaded yet, waiting another 5 seconds...');
             await sleep(5000);
-            console.log(`📊 Now has access to ${selfbotClient.guilds.cache.size} servers`);
+            await sendUpdate(`📊 Now has access to ${selfbotClient.guilds.cache.size} servers`);
           }
         }
       }
       
       const guild = selfbotClient.guilds.cache.get(data.serverId);
       if (!guild) {
-        console.log(`❌ Server not found for broadcast trigger.`);
-        console.log(`   Server ID: ${data.serverId}`);
-        console.log(`   Available servers: ${Array.from(selfbotClient.guilds.cache.values()).map(g => `${g.name} (${g.id})`).join(', ')}`);
+        const availableServers = Array.from(selfbotClient.guilds.cache.values()).map(g => `${g.name} (${g.id})`).join('\n');
+        await sendUpdate(`❌ **Server not found for broadcast!**\n\n**Server ID provided:** ${data.serverId}\n\n**Available servers:**\n${availableServers || 'None'}\n\nPlease check the server ID and try again.`);
+        fs.unlinkSync(triggerFile);
         return;
       }
       await guild.members.fetch();
@@ -536,14 +661,13 @@ function watchSelfbotTrigger() {
       global.broadcastInProgress = true;
       global.stopBroadcast = false;
       
-      console.log(`\n📤 Starting broadcast to ${totalMembers} members...`);
+      await sendUpdate(`📤 Starting broadcast to ${totalMembers} members...`);
       
       for (let i = 0; i < members.length; i++) {
         // Check if stop was requested
         if (global.stopBroadcast) {
-          console.log(`\n⛔ Broadcast stopped by user!`);
-          console.log(`   Messages sent before stop: ${sent}/${totalMembers}`);
-          console.log(`   Messages failed: ${failed}\n`);
+          const stopMsg = `⛔ **Broadcast stopped by user!**\n\n✅ Messages sent before stop: **${sent}/${totalMembers}**\n❌ Messages failed: **${failed}**`;
+          await sendUpdate(stopMsg);
           global.broadcastInProgress = false;
           global.stopBroadcast = false;
           break;
@@ -553,10 +677,8 @@ function watchSelfbotTrigger() {
         try {
           await member.send(data.message);
           sent++;
-          console.log(`✅ Message sent to ${member.user.tag} (${sent}/${totalMembers})`);
         } catch (err) {
           failed++;
-          console.log(`❌ Failed to send to ${member.user.tag}`);
         }
         
         // Progress report and cooldown every 10 DMs
@@ -564,26 +686,13 @@ function watchSelfbotTrigger() {
           const progressPercent = Math.round(((i + 1) / totalMembers) * 100);
           const progressMsg = `📊 **PROGRESS REPORT - Batch ${Math.ceil((i + 1) / 10)}**\n\n✅ Sent: **${sent}/${totalMembers}** (${progressPercent}%)\n❌ Failed: **${failed}**\n⏰ Time: ${new Date().toLocaleString()}`;
           
-          console.log(`\n${progressMsg}`);
-          
-          // Send progress update to command channel
-          if (data.channelId) {
-            try {
-              const channel = await client.channels.fetch(data.channelId);
-              if (channel) {
-                await channel.send(progressMsg);
-                console.log(`   ✉️ Progress update sent to channel`);
-              }
-            } catch (err) {
-              console.log(`   ⚠️ Could not send progress update to channel: ${err.message}`);
-            }
-          }
+          await sendUpdate(progressMsg);
           
           // Wait 3-8 minutes after every 10 DMs (but not after the last batch)
           if (i + 1 < members.length) {
             const cooldownMs = getRandomDelay(180000, 480000);
             const cooldownMin = Math.round(cooldownMs / 60000);
-            console.log(`⏳ Waiting ${cooldownMin} minutes before next batch...\n`);
+            await sendUpdate(`⏳ Waiting ${cooldownMin} minutes before next batch...`);
             await sleep(cooldownMs);
           }
         } else {
@@ -596,20 +705,8 @@ function watchSelfbotTrigger() {
       global.broadcastInProgress = false;
       const finalMsg = `✨ **Broadcast Complete!**\n\n📅 Started: ${startTime}\n📅 Finished: ${new Date().toLocaleString()}\n\n✅ Total Sent: **${sent}/${totalMembers}**\n❌ Total Failed: **${failed}**`;
       
-      console.log(`\n${finalMsg}\n`);
-      
-      // Send final summary to command channel
-      if (data.channelId) {
-        try {
-          const channel = await client.channels.fetch(data.channelId);
-          if (channel) {
-            await channel.send(finalMsg);
-            console.log(`✉️ Final summary sent to channel\n`);
-          }
-        } catch (err) {
-          console.log(`⚠️ Could not send final summary to channel: ${err.message}\n`);
-        }
-      }
+      await sendUpdate(finalMsg);
+      fs.unlinkSync(triggerFile);
     } catch (err) {
       console.error('Trigger watcher error:', err);
       global.broadcastInProgress = false;
@@ -618,6 +715,55 @@ function watchSelfbotTrigger() {
 }
 
 watchSelfbotTrigger();
+
+// ============== SCHEDULED MENTIONS ==============
+function checkScheduledMentions() {
+  setInterval(async () => {
+    try {
+      const schedules = await ScheduledMentions.findAll({
+        where: { enabled: true },
+      });
+
+      for (const schedule of schedules) {
+        const now = new Date();
+        const lastMention = schedule.lastMentionTime ? new Date(schedule.lastMentionTime) : null;
+        
+        // Check if it's time to send a mention
+        const shouldSend = !lastMention || 
+          (now - lastMention) >= (schedule.intervalHours * 60 * 60 * 1000);
+
+        if (shouldSend) {
+          try {
+            const channel = await client.channels.fetch(schedule.channelId);
+            if (channel && channel.isTextBased()) {
+              const message = await channel.send('@everyone');
+              // Delete the message immediately
+              setTimeout(async () => {
+                try {
+                  await message.delete();
+                } catch (err) {
+                  console.error('Failed to delete scheduled mention:', err);
+                }
+              }, 100);
+
+              // Update last mention time
+              schedule.lastMentionTime = now;
+              await schedule.save();
+
+              console.log(`📢 Sent scheduled mention in ${channel.name} (Guild: ${schedule.guildId})`);
+            }
+          } catch (err) {
+            console.error('Failed to send scheduled mention:', err);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Scheduled mentions checker error:', err);
+    }
+  }, 60000); // Check every minute
+}
+
+checkScheduledMentions();
 
 // ============== LOGIN ==============
 client.login(BOT_TOKEN).catch(err => console.error('Failed to login:', err));

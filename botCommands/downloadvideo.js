@@ -36,9 +36,12 @@ async function downloadVideo(url, outputPath) {
   }
   
   const args = [
-    '-f', 'bestvideo[filesize<20M]+bestaudio[filesize<5M]/best[filesize<25M]/bestvideo+bestaudio/best',
+    '-f', 'best[ext=mp4]/best',
     '--merge-output-format', 'mp4',
     '--no-warnings',
+    '--no-check-certificates',
+    '--extractor-retries', '5',
+    '--retries', '10',
     '-o', outputPath,
     url
   ];
@@ -140,7 +143,7 @@ module.exports = {
       });
     }
 
-    await interaction.deferReply();
+    await interaction.deferReply({ ephemeral: true });
 
     const tempDir = path.join(__dirname, '..', 'temp_videos');
     try {
@@ -202,7 +205,8 @@ module.exports = {
           
           await interaction.followUp({
             content: `✅ **Video ${videoNum}** - ${sizeInMB}MB${compressNote}`,
-            files: [finalPath]
+            files: [finalPath],
+            ephemeral: true
           });
 
           successful++;

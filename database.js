@@ -57,6 +57,26 @@ const ServerTemplates = sequelize.define('server_templates', {
   },
 });
 
+// Define AttachmentRules model once and export it
+const AttachmentRules = sequelize.define('attachment_rules', {
+  guildId: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  channelId: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  requiredPhrase: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  enabled: {
+    type: Sequelize.BOOLEAN,
+    defaultValue: true,
+  },
+});
+
 // Sync all models
 sequelize.sync();
 
@@ -64,4 +84,5 @@ module.exports = {
   sequelize,
   Warnings,
   ServerTemplates,
+  AttachmentRules,
 };
