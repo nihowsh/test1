@@ -230,6 +230,7 @@ module.exports = {
     let failed = 0;
     const results = [];
     const filesToCleanup = [];
+    const successfulVideos = [];
 
     try {
       for (let i = 0; i < links.length; i++) {
@@ -286,19 +287,26 @@ module.exports = {
           const sizeInMB = (fileSize / 1024 / 1024).toFixed(1);
           const compressNote = compressed ? ' (compressed)' : '';
           
-          await interaction.followUp({
-            content: `✅ **Video ${videoNum}** - ${sizeInMB}MB${compressNote}`,
-            files: [finalPath]
+          successfulVideos.push({
+            path: finalPath,
+            size: sizeInMB,
+            compressed: compressNote
           });
 
           successful++;
-          results.push(`✅ Video ${videoNum}`);
+          results.push(`✅ Video ${videoNum} - ${sizeInMB}MB${compressNote}`);
 
         } catch (error) {
           console.error(`Download error for video ${videoNum}:`, error);
           failed++;
           results.push(`❌ Video ${videoNum}: ${error.message.substring(0, 50)}`);
         }
+      }
+
+      if (successfulVideos.length > 0) {
+        await interaction.channel.send({
+          files: successfulVideos.map(v => v.path)
+        });
       }
 
       await interaction.editReply({
