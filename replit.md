@@ -42,26 +42,63 @@ This is a feature-rich Discord bot (bot.js) with integrated selfbot functionalit
 - Shared database module (`database.js`) for consistent data persistence
 
 ## Recent Changes
-### November 14, 2025 - Major Feature Enhancements
-- ✅ **NEW /attachmentrules**: Enforce phrase/format requirements for attachments in specific channels
-  - Auto-deletes non-compliant attachments
+### November 14, 2025 - Comprehensive AutoMod System Overhaul ✨
+- ✅ **COMPLETELY REWROTE /automod**: Full server automation configuration
+  - `/automod status` - View all automod settings at a glance
+  - `/automod setspam` - Configure spam detection (messages, time window, auto-mute)
+  - `/automod setmentionspam` - Set mention spam limits
+  - `/automod linkfilter` - Toggle link filtering on/off
+  - `/automod raidprotection` - Configure anti-raid thresholds and auto-lockdown
+  - `/automod setactions` - Set auto-warn/mute/kick/ban thresholds
+  - `/automod duplicates` - Toggle duplicate message detection
+  - `/automod reset` - Reset all settings to defaults
+  - **All settings now fully configurable per server via database**
+
+- ✅ **NEW /wordfilter**: Blacklist words/phrases with custom actions
+  - `/wordfilter add` - Add word with action (delete, warn, or mute)
+  - `/wordfilter remove` - Remove word from blacklist
+  - `/wordfilter list` - View all filtered words
+  - `/wordfilter clear` - Clear all filtered words
+  - **Supports auto-warn escalation: 3 warns = mute, 5 warns = kick, 7 warns = ban**
+
+- ✅ **ENHANCED Auto-moderation**: All features now use AutoModConfig database
+  - Spam detection: Configurable message limits and time windows
+  - Link filtering: Toggleable with configurable allowed domains
+  - Duplicate messages: Configurable detection and deletion
+  - Mention spam: Configurable mention limits per message
+  - Emoji spam: Auto-delete messages with 10+ emojis
+  - Caps lock filter: Auto-delete messages with 70%+ caps
+  - **Auto-mute spammers with configurable duration**
+
+- ✅ **ENHANCED Raid Protection**: Smart auto-lockdown system
+  - Configurable join thresholds (default: 5 joins in 10 seconds)
+  - Optional auto-lockdown feature (locks all channels)
+  - Safe implementation: Only denies SendMessages, reversible with /unlockdown
+  - Detailed logging of raid alerts and lockdown actions
+
+- ✅ **NEW Auto-moderation Actions**: Progressive punishment system
+  - Auto-warn users for violations (word filters, spam, etc.)
+  - Auto-mute at 3 warnings (configurable)
+  - Auto-kick at 5 warnings (configurable)
+  - Auto-ban at 7 warnings (configurable)
+  - **All thresholds fully customizable via /automod setactions**
+
+- ✅ **NEW /attachmentrules**: Enforce phrase requirements for attachments
+  - Auto-deletes attachments without required phrase
+  - Warning messages auto-delete after 10 seconds ✅
   - Per-channel configuration with add/remove/list subcommands
-  - Sends DM notifications to users explaining what's required
-- ✅ **NEW /schedulemention**: Auto-schedule @everyone mentions with instant deletion
-  - Configure interval per channel (e.g., every 2 hours)
-  - Background scheduler checks every minute and sends @everyone when interval elapsed
-  - Messages deleted immediately (100ms) to avoid spam
-- ✅ **ENHANCED /downloadvideo**: Now supports multiple simultaneous links and ephemeral responses
-  - All responses are ephemeral (only visible to command user)
-  - Download multiple videos at once (up to 10)
-  - Improved yt-dlp format selector for better compatibility
-- ✅ **ENHANCED Auto-moderation**: Added 5 new auto-mod features
-  - Duplicate message detection (same message 3+ times in 10 seconds)
-  - Emoji spam protection (10+ emojis triggers warning)
-  - Caps lock filter (70%+ caps in messages over 10 chars triggers warning)
-  - Mention spam protection (5+ mentions triggers warning)
-  - Anti-raid detection (5+ joins in 10 seconds locks server)
-- ✅ **IMPROVED selfbot and massdm**: All status messages now sent to command channel instead of console
+
+- ✅ **NEW /schedulemention**: Auto-schedule @everyone mentions
+  - Configure interval per channel (default: 2 hours)
+  - Mentions auto-delete immediately (100ms) ✅
+  - Background scheduler checks every minute
+
+- ✅ **Database Enhancements**: New tables for full automation
+  - `AutoModConfig` - Per-server automod settings
+  - `WordFilter` - Blacklisted words with actions
+  - `ScheduledMentions` - Auto-mention scheduling
+  - `AttachmentRules` - Per-channel attachment requirements
+  - **All settings persist and survive bot restarts**
 
 ### November 13, 2025 - Critical Bug Fixes
 - ✅ **FIXED serverstats**: Resolved "Invalid number value" error by consolidating embed fields from 27 to 11 (Discord max is 25)
@@ -115,7 +152,7 @@ These commands require a passcode (set via PASSCODE environment variable) - **ev
 
 **Recommendation**: Web Service works but may sleep on free tier. Use UptimeRobot to keep it awake, or upgrade to Starter plan ($7/month).
 
-## All Available Commands (33 Total)
+## All Available Commands (34 Total)
 
 ### Moderation (19 commands)
 - `/ban`, `/kick`, `/mute`, `/unmute`, `/unban` - Basic moderation
@@ -129,13 +166,14 @@ These commands require a passcode (set via PASSCODE environment variable) - **ev
 - `/addrole`, `/removerole` - Manage user roles
 - `/checkbans` - View server bans
 
-### Server Management (6 commands)
+### Server Management (7 commands)
 - `/saveclone` - Save server template with code (roles, channels, permissions)
 - `/loadclone` - Load and apply server template
 - `/serverstats` - Detailed server analytics
 - `/setmodlog` - Configure moderation logging
 - `/modrules` - Set server rules
-- `/automod` - Configure auto-moderation
+- `/automod` - Configure comprehensive auto-moderation (8 subcommands)
+- `/wordfilter` - Manage word blacklist with custom actions (4 subcommands)
 
 ### Special Features (6 commands)
 - `/selfbot` - Mass DM with progress reports (passcode protected)
